@@ -1,0 +1,5 @@
+Attribut "Beschreibung" in "Merkmal" darf auch NULL sein, da z.B. DSL16K keine weitere Beschreibung benötigt.
+Attribut "Steuersatz" in "Flughafen" könnte ebenfalls NULL sein, z.B. keine Flughafensteuer in verschiedenen Ländern/Flughäfen
+Attribut "Platzangebot in "Flugzeugtyp_has_Buchungsklasse" sollte NOT NULL sein. Eine verfügbare Klasse hat mindestens ein Platzangebot um sinnvoll zu existieren.
+
+ 

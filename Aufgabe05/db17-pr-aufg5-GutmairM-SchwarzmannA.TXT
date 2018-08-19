@@ -1,0 +1,268 @@
+﻿
+____ENTITIES___________
+
+LOAD CSV WITH HEADERS FROM "file:///users.csv" AS csvLine FIELDTERMINATOR ';' 
+CREATE 
+	(u:User {
+		userName:csvLine.userName,
+		userEmail: csvLine.userEmail,
+		userPassword: csvLine.userPassword,
+		enabled: toBoolean(csvLine.enabled)
+		}
+	);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///ingredients.csv" AS csvLine FIELDTERMINATOR ';'
+CREATE
+	(i:Ingredient {ingredientName: csvLine.ingredientName});
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///recipes.csv" AS csvLine FIELDTERMINATOR ';'
+CREATE 
+	(r:Recipe {
+			recipeName: csvLine.recipeName,
+			prepTimeInMinutes: toInteger(csvLine.prepTimeInMinutes),
+			restTimeInMinutes: toInteger(csvLine.restTimeInMinutes),
+			prepText: csvLine.prepText,
+			people: toInteger(csvLine.people),
+			createdByUser: csvLine.createdByUser,
+			enabled: toBoolean(csvLine.enabled)
+			}
+	);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///recipes.csv" AS csvLine
+	FIELDTERMINATOR ';'
+MERGE (
+	d:Difficulty {
+			difficultyName: csvLine.difficultyName
+			}
+	);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///recipes.csv" AS csvLine FIELDTERMINATOR ';'
+MERGE
+	(m:MealType {mealTypeName: csvLine.mealTypeName});
+------------------------------------------------------------------------------------------------------------------------------------------------
+
+__________RELATIONSHIPS___________
+
+LOAD CSV WITH HEADERS FROM "file:///ingredient_to_recipe.csv" AS csvLine FIELDTERMINATOR ';'    
+MATCH
+	(r:Recipe)
+WHERE
+	r.recipeName = csvLine.recipeName
+MATCH
+	(i:Ingredient)
+WHERE
+	i.ingredientName = csvLine.ingredientName
+MERGE
+	(r)-[:NEEDS{
+			unitName:csvLine.unitName,
+			unitAbbreviation:csvLine.unitAbbreviation,
+			amount:csvLine.amount
+		}]->(i);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///recipes.csv" as csvLine FIELDTERMINATOR ';'
+MATCH
+	(r:Recipe)
+WHERE
+	r.recipeName = csvLine.recipeName
+MATCH
+	(d:Difficulty)
+WHERE
+	d.difficultyName = csvLine.difficultyName
+CREATE
+	(r)-[:HAS_DIFFICULTY]->(d);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///user_has_favourite.csv" AS csvLine FIELDTERMINATOR ';'    
+MATCH 
+	(u:User) 
+WHERE 
+	u.userName = csvLine.userName
+MATCH
+	(r:Recipe)
+WHERE
+	r.recipeName = csvLine.favouriteRecipe
+MERGE
+	(u)-[:FAVORS]->(r);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///user_rated_recipe.csv" AS csvLine FIELDTERMINATOR ';'
+MATCH
+	(u:User)
+WHERE
+	u.userName = csvLine.userName
+MATCH
+	(r:Recipe)
+WHERE
+	r.recipeName = csvLine.recipeName
+MERGE
+	(u)-[:RATED{rating:toInteger(csvLine.rating)}]->(r);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///recipes.csv" AS csvLine FIELDTERMINATOR ';'
+MATCH
+	(r:Recipe)
+WHERE
+	r.recipeName = csvLine.recipeName
+MATCH
+	(m:MealType)
+WHERE
+	m.mealTypeName = csvLine.mealTypeName
+CREATE
+	(r)-[:IS]->(m);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///recipes.csv" AS csvLine FIELDTERMINATOR ';'
+MATCH
+	(u:User)
+WHERE
+	u.userName = csvLine.createdByUser
+MATCH
+	(r:Recipe)
+WHERE
+	r.recipeName = csvLine.recipeName
+MERGE
+	(u)-[:CREATED]->(r);
+------------------------------------------------------------------------------------------------------------------------------------------------
+LOAD CSV WITH HEADERS FROM "file:///user_has_mealplan_includes_recipe.csv" AS csvLine FIELDTERMINATOR ';'
+MATCH
+	(u:User {userName: csvLine.userName})
+MATCH 
+	(r:Recipe {recipeName: csvLine.recipeName})
+CREATE
+	(u)-[:HAS]->(m:MealPlan{mealPlanId: csvLine.mealPlanId})
+CREATE 
+	(m)-[:CONTAINS {date: csvLine.date}]->(r);
+------------------------------------------------------------------------------------------------------------------------------------------------	
+	
+__________AUFGABEN___________
+1-----------------------------------------------------------------------------------------------------------------------------------------------	
+MATCH 
+	(r:Recipe)
+RETURN 
+	r;
+
+2-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH 
+	(r:Recipe) 
+RETURN 
+	r.recipeName as Rezeptname,
+	r.prepTimeInMinutes + " min" as Zubereitungszeit,
+	r.restTimeInMinutes + " min" as Wartezeit
+ORDER BY
+	r.prepTimeInMinutes ASC;
+------------------------------------------------------------------------------------------------------------------------------------------------
+
+3-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(r:Recipe)
+RETURN
+	r.recipeName as Rezeptname,
+	r.prepTimeInMinutes + r.RestTimeInMinutes + " min" as Gesamtzeit
+ORDER BY
+	Gesamtzeit DESC;
+
+4-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(u:User)-[:CREATED]->(r:Recipe),
+	(m:Recipe)-[:IS]->(d:MealType{mealTypeName: "Hauptspeise"})
+MATCH
+	(r)-[:HAS_DIFFICULTY]->(a:Difficulty{difficultyName: "normal"})
+RETURN DISTINCT
+	u.userName AS Nutzername,
+	r.recipeName AS Rezept;
+
+5-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(u:User)-[:CREATED]->(r:Recipe)
+RETURN DISTINCT
+	u.userName AS Nutzername;
+
+6-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(r:Recipe)-[n:NEEDS{unitName: "nach Bedarf"}]->(i:Ingredient)
+SET
+	n.unitName ="etwas";
+
+7-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(r:Recipe)-[n:NEEDS{unitName: n.unitAbbreviation}]->(i:Ingredient)
+REMOVE
+	n.unitAbbreviation;
+
+8-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(u:User)-[ra:RATED]->(r:Recipe) 
+WITH 
+	r, AVG(toInteger(ra.rating)) AS average
+SET
+	r.ratingAverage = average,
+	r.lastModified = timestamp();
+
+9-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(maxr:Recipe)
+WITH 
+	MAX(maxr.ratingAverage) AS maxRating 
+MATCH
+	(r:Recipe) 
+WHERE
+	r.ratingAverage = maxRating
+RETURN
+	r.recipeName AS Rezeptname,
+	r.ratingAverage AS Durchschnittsbewertung;
+
+10-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(u:User{userName: 'CooperKilvington'})-[:HAS]->(m:MealPlan)
+MATCH
+	(m:MealPlan)-[:CONTAINS]->(r:Recipe)
+MATCH
+	(r:Recipe)-[:NEEDS]->(i:Ingredient)
+RETURN COLLECT
+	(DISTINCT i.ingredientName) AS Zutaten;
+	
+11-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(r:Recipe)<-[f:FAVORS]-(u:User)
+RETURN 
+	r.recipeName AS Rezept, COUNT(f) AS Favorisierungen
+ORDER BY
+	Favorisierungen DESC;
+
+12-----------------------------------------------------------------------------------------------------------------------------------------------
+USING PERIODIC COMMIT
+LOAD CSV WITH HEADERS FROM "file:///users_are_friends.csv" AS csvLine FIELDTERMINATOR ';'
+MATCH
+	(u1:User{userName: csvLine.userNameOne})
+MATCH
+    (u2:User{userName: csvLine.userNameTwo})
+CREATE
+	(u1)-[:IS_FRIEND_WITH]->(u2),
+	(u2)-[:IS_FRIEND_WITH]->(u1);
+
+13-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	(u:User{userName:'KaliSavile'})-[:IS_FRIEND_WITH]->(u2:User)
+RETURN
+	u2.userName AS `Freunde von KaliSavile`;
+	
+14-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH 
+	friendsOverThree = (u1:User{userName:"KaliSavile"})-[:IS_FRIEND_WITH]->(u2:User)-[:IS_FRIEND_WITH]->(u3:User)-[:IS_FRIEND_WITH]->(u4:User) 
+MATCH
+	hisRecipesOfHisMealPlans = (u4)-[:HAS]->(m:MealPlan)-[:CONTAINS]->(r:Recipe) 
+MATCH
+	ratingIsFive = (u4)-[:RATED{rating:toInteger(5)}]->(r)
+RETURN DISTINCT
+	r.recipeName AS Rezept;
+	
+15-----------------------------------------------------------------------------------------------------------------------------------------------
+MATCH
+	friendsOverThree = (u1:User{userName:"KaliSavile"})-[:IS_FRIEND_WITH]->(u2:User)-[:IS_FRIEND_WITH]->(u3:User)-[:IS_FRIEND_WITH]->(u4:User) 
+MATCH
+	hisRecipesOfHisMealPlans = (u4)-[:HAS]->(m:MealPlan)-[:CONTAINS]->(r1:Recipe) 
+MATCH
+	kaliRecipes = (u1)-[:HAS]->(:MealPlan)-[:CONTAINS]->(r2:Recipe)
+MATCH
+	ratingIsFive = (u4)-[:RATED{rating:toInteger(5)}]->(r1)
+WITH 
+	COLLECT(DISTINCT r1.recipeName) as friendsRecipes,
+	COLLECT(DISTINCT r2.recipeName) as kaliSavileRecipes
+RETURN
+	filter(e IN friendsRecipes WHERE NOT e IN kaliSavileRecipes) AS `Rezepte von Freund³, bewertet mit 5 und nicht in KaliSaviles Essensplan`;
